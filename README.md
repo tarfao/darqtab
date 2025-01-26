@@ -10,3 +10,5 @@ rc = run commands
 // paredes
 
 next.js 13
+
+// não precisou do prettierignore pois ele utiliza o .gitignore para ignorar os arquivos
