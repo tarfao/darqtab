@@ -3,39 +3,56 @@ import { join } from "node:path";
 import database from 'infra/database';
 
 export default async function migrations(request, response) {  
-  const dbClient = await database.getNewClient();
+  const allowedMethods = ['GET', 'POST'];
 
-  const defaultMigrationOptions = {
-    dbClient,
-    dryRun: true, //executa as migrations de forma "fake"
-    dir: join("infra", "migrations"), //independente do SO o join consegue resolver o path
-    direction: "up",
-    verbose: true,
-    migrationsTable: "pgmigrations"
+  if(!allowedMethods.includes(request.method)) {
+    return response.status(405).json({
+      error: 'Method not allowed'
+    });
   }
 
-  if(request.method === 'GET') {
-    const pendingMigrations = await migrationRunner(defaultMigrationOptions)
-    
-    await dbClient.end();
+  let dbClient;
 
-    return response.status(200).json(pendingMigrations);
-  }
+  try {
+    dbClient = await database.getNewClient();
 
-  if(request.method === 'POST') {
-    const migratedMigrations = await migrationRunner({
-      ...defaultMigrationOptions,
-      dryRun: false,
-    })
-
-    await dbClient.end();
-
-    if(migratedMigrations.length > 0) {
-      return response.status(201).json(migratedMigrations);
+    const defaultMigrationOptions = {
+      dbClient,
+      dryRun: true, //executa as migrations de forma "fake"
+      dir: join("infra", "migrations"), //independente do SO o join consegue resolver o path
+      direction: "up",
+      verbose: true,
+      migrationsTable: "pgmigrations"
     }
-    
-    return response.status(200).json(migratedMigrations);
-  }
 
-  response.status(405).end(); 
+    if(request.method === 'GET') {
+      const pendingMigrations = await migrationRunner(defaultMigrationOptions)
+      
+      await dbClient.end();
+  
+      return response.status(200).json(pendingMigrations);
+    }
+  
+    if(request.method === 'POST') {
+      const migratedMigrations = await migrationRunner({
+        ...defaultMigrationOptions,
+        dryRun: false,
+      })
+  
+      await dbClient.end();
+  
+      if(migratedMigrations.length > 0) {
+        return response.status(201).json(migratedMigrations);
+      }
+      
+      return response.status(200).json(migratedMigrations);
+    }
+  } catch (error) {
+    console.error(error);
+    throw error;
+  } finally {
+    if(dbClient) {
+      await dbClient.end();
+    }
+  }
 }
